@@ -198,25 +198,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   </div>
 </div>
 
-<!-- Columnas a incluir -->
-<div class="card">
-  <div class="card-title">Columnas a exportar</div>
-  <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Selecciona qué columnas del CSV original incluir en el archivo de salida.</p>
-  <div class="cols-grid" id="colsGrid">
-    <!-- generado dinámicamente -->
-    <label class="col-chip active" data-col="id"><input type="checkbox" checked> <span>id</span><small style="color:var(--muted);font-size:10px">(vacío)</small></label>
-    <label class="col-chip active" data-col="sku"><input type="checkbox" checked> <span>sku</span></label>
-    <label class="col-chip active" data-col="nombre"><input type="checkbox" checked> <span>nombre</span></label>
-    <label class="col-chip active" data-col="precio"><input type="checkbox" checked> <span>precio</span></label>
-    <label class="col-chip active" data-col="stock"><input type="checkbox" checked> <span>stock</span></label>
-    <label class="col-chip active" data-col="descripcion"><input type="checkbox" checked> <span>descripcion</span></label>
-    <label class="col-chip active" data-col="imgUrl"><input type="checkbox" checked> <span>imgUrl</span></label>
-    <label class="col-chip active" data-col="categoria"><input type="checkbox" checked> <span>categoría</span></label>
-    <label class="col-chip" data-col="costo"><input type="checkbox"> <span>costo</span></label>
-    <label class="col-chip" data-col="unidad"><input type="checkbox"> <span>unidad</span></label>
-    <label class="col-chip" data-col="cantidad_minima"><input type="checkbox"> <span>cant. mínima</span></label>
-  </div>
-</div>
 
 <!-- Mayoreo -->
 <div class="card">
@@ -275,15 +256,6 @@ dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
 dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)handleFile(f)});
 document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0])});
 
-// Col chips toggle
-document.querySelectorAll('#colsGrid .col-chip').forEach(chip=>{
-  chip.addEventListener('click',function(e){
-    const cb=this.querySelector('input');
-    if(e.target!==cb){cb.checked=!cb.checked}
-    this.classList.toggle('active',cb.checked);
-    if(parsedRows.length)showPreview(parsedRows.slice(0,5));
-  });
-});
 
 function handleFile(file){
   if(!file.name.endsWith('.csv')){showMsg('msgRow','Solo se aceptan archivos .csv','error');return}
@@ -385,14 +357,6 @@ function parseCSV(text,file){
   document.getElementById('msgRow').innerHTML='';
 }
 
-function getActiveCols(){
-  const active=new Set();
-  document.querySelectorAll('#colsGrid .col-chip').forEach(chip=>{
-    if(chip.querySelector('input').checked)active.add(chip.dataset.col);
-  });
-  return active;
-}
-
 function sanitizeNum(val){
   if(val===null||val===undefined||val==='')return'';
   // Quitar espacios, reemplazar coma decimal por punto, quitar caracteres no numéricos excepto punto y signo
@@ -411,38 +375,47 @@ function applyPriceMod(val){
 
 const fijos=['1/2 DOC','DOC','FARDO'];
 
-function buildOutputRow(row){
+function buildMayoreoStr(row){
+  // Reconstruir columna H en formato nombre:precio (sin el símbolo %)
+  // El sistema acepta: nombre:precio#nombre2:precio2
   const incMayoreo=document.getElementById('chkMayoreo').checked;
-  const modMayoreo=document.getElementById('chkMayoreoModificar').checked;
   const incOtros=document.getElementById('chkOtros').checked;
+  const modMayoreo=document.getElementById('chkMayoreoModificar').checked;
+  if(!incMayoreo||!detectedMayoreo.length)return row['Precios Adicionales']||'';
+  const partes=[];
+  detectedMayoreo.forEach(tipo=>{
+    const esOtro=!fijos.includes(tipo);
+    if(esOtro&&!incOtros)return;
+    const val=row._mayoreo[tipo];
+    if(val!==undefined&&val!==''){
+      const numVal=parseFloat(val);
+      const finalVal=modMayoreo?applyPriceMod(numVal):numVal.toFixed(2);
+      partes.push(`${tipo}:${finalVal}`);
+    }
+  });
+  return partes.join('#');
+}
+
+function buildOutputRow(row){
   const stock=document.getElementById('stockVal').value;
-  const activeCols=getActiveCols();
-  const out={};
-  if(activeCols.has('id'))out['id']='';
-  if(activeCols.has('sku'))out['sku']=row['Clave']||'';
-  if(activeCols.has('nombre'))out['nombre']=row['Nombre']||'';
-  if(activeCols.has('precio'))out['precio']=applyPriceMod(parseFloat(sanitizeNum(row['Precio']))||0);
-  if(activeCols.has('stock'))out['stock']=stock;
-  if(activeCols.has('descripcion'))out['descripcion']='';
-  if(activeCols.has('imgUrl'))out['imgUrl']='';
-  if(activeCols.has('categoria'))out['categoría']=row['Categoría']||'';
-  if(activeCols.has('costo'))out['costo']=sanitizeNum(row['Costo']);
-  if(activeCols.has('unidad'))out['unidad']=row['Unidad']||'';
-  if(activeCols.has('cantidad_minima'))out['cantidad_minima']=sanitizeNum(row['Cantidad Mínima']);
-  if(incMayoreo&&detectedMayoreo.length>0){
-    detectedMayoreo.forEach(tipo=>{
-      const esOtro=!fijos.includes(tipo);
-      if(esOtro&&!incOtros)return;
-      const val=row._mayoreo[tipo];
-      if(val!==undefined&&val!==''){
-        const numVal=parseFloat(val);
-        out[columnaCSV(tipo)]=modMayoreo?applyPriceMod(numVal):numVal.toFixed(2);
-      } else {
-        out[columnaCSV(tipo)]='';
-      }
-    });
-  }
-  return out;
+  const precio=applyPriceMod(parseFloat(sanitizeNum(row['Precio']))||0);
+  const costo=sanitizeNum(row['Costo']);
+  const costoPromedio=sanitizeNum(row['Costo Promedio']);
+  const cantMin=sanitizeNum(row['Cantidad Mínima']);
+  // Orden fijo: A B C D E F G H I J K
+  return {
+    'Clave':    (row['Clave']||'').slice(0,60),
+    'Unidad':   (row['Unidad']||'').slice(0,25),
+    'Nombre':   (row['Nombre']||'').slice(0,100),
+    'Cantidad': stock,
+    'Costo':    costo,
+    'Precio':   precio,
+    'Cantidad Mínima': cantMin,
+    'Precios Adicionales': buildMayoreoStr(row),
+    'Información Adicional': (row['Información Adicional']||'').slice(0,250),
+    'Categoría': (row['Categoría']||'').slice(0,25),
+    'Costo Promedio': costoPromedio,
+  };
 }
 
 function showStats(total){
@@ -459,20 +432,19 @@ function showPreview(rows){
   if(!rows.length)return;
   const sample=rows.map(r=>buildOutputRow(r));
   const cols=Object.keys(sample[0]);
+  const numCols=new Set(['Costo','Precio','Cantidad','Cantidad Mínima','Costo Promedio']);
   let html='<table><thead><tr>';
   cols.forEach(c=>{
-    const labelMap={'precio_media_docena':'1/2 DOC','precio_docena':'DOC','precio_fardo':'FARDO'};
-    const label=labelMap[c]||c;
-    const isMayoreo=c.startsWith('precio_');
-    html+=`<th style="${isMayoreo?'color:var(--accent2)':''}">${label}</th>`;
+    const isNum=numCols.has(c);
+    html+=`<th style="${isNum?'color:var(--accent)':''}">${c}</th>`;
   });
   html+='</tr></thead><tbody>';
   sample.forEach(row=>{
     html+='<tr>';
     cols.forEach(c=>{
-      const isMayoreo=c.startsWith('precio_');
-      const isPrice=c==='precio'||c==='costo';
-      const cls=isMayoreo?'mayoreo-cell':isPrice?'price-cell':'';
+      const isNum=numCols.has(c);
+      const isMayoreo=c==='Precios Adicionales';
+      const cls=isNum?'price-cell':isMayoreo?'mayoreo-cell':'';
       html+=`<td class="${cls}" title="${row[c]}">${row[c]}</td>`;
     });
     html+='</tr>';
