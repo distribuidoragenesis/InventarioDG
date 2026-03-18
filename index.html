@@ -418,9 +418,9 @@ function buildOutputRow(row){
   if(activeCols.has('descripcion'))out['descripcion']='';
   if(activeCols.has('imgUrl'))out['imgUrl']='';
   if(activeCols.has('categoria'))out['categoría']=row['Categoría']||'';
-  if(activeCols.has('costo'))out['costo']=row['Costo']||'';
+  if(activeCols.has('costo')){const c=parseFloat(row['Costo']);out['costo']=isNaN(c)?'':c.toFixed(2);}
   if(activeCols.has('unidad'))out['unidad']=row['Unidad']||'';
-  if(activeCols.has('cantidad_minima'))out['cantidad_minima']=row['Cantidad Mínima']||'';
+  if(activeCols.has('cantidad_minima')){const cm=parseFloat(row['Cantidad Mínima']);out['cantidad_minima']=isNaN(cm)?'':cm.toFixed(2);}
   if(incMayoreo&&detectedMayoreo.length>0){
     detectedMayoreo.forEach(tipo=>{
       const esOtro=!fijos.includes(tipo);
