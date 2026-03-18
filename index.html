@@ -338,7 +338,7 @@ function parseMayoreo(str){
     if(segs.length>=2){
       const nombre=normalizarTipo(segs[0].trim());
       // El valor puede venir como precio directo o como modificador
-      const rawVal=segs[1].replace('%','').trim();
+      const rawVal=segs[1].replace('%','').trim().replace(/,/g,'.');
       const val=parseFloat(rawVal);
       if(nombre&&!isNaN(val))result[nombre]=val;
     }
@@ -350,7 +350,7 @@ function parseCSV(text,file){
   const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());
   const bom=lines[0].charCodeAt(0)===0xFEFF;
   const headerLine=bom?lines[0].slice(1):lines[0];
-  headers=parseRow(headerLine).map(h=>h.trim());
+  headers=parseRow(headerLine).map(h=>h.trim()).filter(h=>h!=='');
   parsedRows=[];
   const mayoreoSet=new Set();
   for(let i=1;i<lines.length;i++){
@@ -393,6 +393,14 @@ function getActiveCols(){
   return active;
 }
 
+function sanitizeNum(val){
+  if(val===null||val===undefined||val==='')return'';
+  // Quitar espacios, reemplazar coma decimal por punto, quitar caracteres no numéricos excepto punto y signo
+  const clean=String(val).trim().replace(/,/g,'.').replace(/[^\d.\-]/g,'');
+  const n=parseFloat(clean);
+  return isNaN(n)?'':n.toFixed(2);
+}
+
 function applyPriceMod(val){
   const op=document.getElementById('precioOp').value;
   if(op==='mitad')return(val/2).toFixed(2);
@@ -413,14 +421,14 @@ function buildOutputRow(row){
   if(activeCols.has('id'))out['id']='';
   if(activeCols.has('sku'))out['sku']=row['Clave']||'';
   if(activeCols.has('nombre'))out['nombre']=row['Nombre']||'';
-  if(activeCols.has('precio'))out['precio']=applyPriceMod(parseFloat(row['Precio'])||0);
+  if(activeCols.has('precio'))out['precio']=applyPriceMod(parseFloat(sanitizeNum(row['Precio']))||0);
   if(activeCols.has('stock'))out['stock']=stock;
   if(activeCols.has('descripcion'))out['descripcion']='';
   if(activeCols.has('imgUrl'))out['imgUrl']='';
   if(activeCols.has('categoria'))out['categoría']=row['Categoría']||'';
-  if(activeCols.has('costo')){const c=parseFloat(row['Costo']);out['costo']=isNaN(c)?'':c.toFixed(2);}
+  if(activeCols.has('costo'))out['costo']=sanitizeNum(row['Costo']);
   if(activeCols.has('unidad'))out['unidad']=row['Unidad']||'';
-  if(activeCols.has('cantidad_minima')){const cm=parseFloat(row['Cantidad Mínima']);out['cantidad_minima']=isNaN(cm)?'':cm.toFixed(2);}
+  if(activeCols.has('cantidad_minima'))out['cantidad_minima']=sanitizeNum(row['Cantidad Mínima']);
   if(incMayoreo&&detectedMayoreo.length>0){
     detectedMayoreo.forEach(tipo=>{
       const esOtro=!fijos.includes(tipo);
