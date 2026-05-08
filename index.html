@@ -514,7 +514,7 @@ function buildOutputRow(row){
   // Si tiene costo lo usa, si no y está activado el auto-costo, lo calcula
   const costo=costoOriginal!==''?costoOriginal:calcCostoAuto(precio);
   const costoPromedio=sanitizeNum(row['Costo Promedio']);
-  const cantMin=sanitizeNum(row['Cantidad Mínima']);
+  const cantMin=sanitizeNum(row['Cantidad Mínima'])||'0';
   // Orden fijo: A B C D E F G H I J K
   return {
     'Clave':    (row['Clave']||'').slice(0,60),
