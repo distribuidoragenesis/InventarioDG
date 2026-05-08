@@ -502,7 +502,7 @@ function calcCostoAuto(precioFinal){
   const pct=parseFloat(document.getElementById('costoAutoPct').value)||30;
   const p=Math.abs(parseFloat(precioFinal)||0);
   if(p===0)return'';
-  const costo=p*(pct/100);
+  const costo=p*(1-(pct/100));
   return costo.toFixed(2);
 }
 
@@ -643,7 +643,7 @@ document.getElementById('chkCostoAuto').addEventListener('change',function(){
 });
 document.getElementById('costoAutoPct').addEventListener('input',function(){
   const pct=parseFloat(this.value)||30;
-  document.getElementById('costoAutoEjemplo').textContent=`Ej: precio Q100 → costo Q${(100*(pct/100)).toFixed(2)}`;
+  document.getElementById('costoAutoEjemplo').textContent=`Ej: precio Q100 → costo Q${(100*(1-pct/100)).toFixed(2)}`;
   if(parsedRows.length)showPreview(parsedRows.slice(0,5));
 });
 
