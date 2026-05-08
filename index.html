@@ -199,6 +199,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </div>
 
 
+<!-- Costo automático -->
+<div class="card">
+  <div class="card-title">Costo automático</div>
+  <div class="mayoreo-inner">
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Si un producto <strong style="color:var(--text)">no tiene costo</strong> en el inventario, se calculará restando un porcentaje del precio de menudeo.</p>
+    <label class="check-row"><input type="checkbox" id="chkCostoAuto"> <span class="check-label">Calcular costo automático cuando esté vacío</span></label>
+    <div id="costoAutoFields" style="display:none;margin-top:10px">
+      <div class="config" style="margin-bottom:0">
+        <div class="field">
+          <label>% a restar del precio</label>
+          <input type="number" id="costoAutoPct" value="30" min="1" max="99" placeholder="ej: 30">
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <div style="font-size:12px;color:var(--muted);padding-bottom:8px;font-family:'DM Mono',monospace" id="costoAutoEjemplo">Ej: precio Q100 → costo Q70.00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Mayoreo -->
 <div class="card">
   <div class="card-title">Precios de mayoreo</div>
@@ -396,10 +416,23 @@ function buildMayoreoStr(row){
   return partes.join('#');
 }
 
+function calcCostoAuto(precioFinal){
+  // Se llama solo si el costo original está vacío
+  const chk=document.getElementById('chkCostoAuto');
+  if(!chk||!chk.checked)return'';
+  const pct=parseFloat(document.getElementById('costoAutoPct').value)||30;
+  const p=parseFloat(precioFinal)||0;
+  if(p===0)return'';
+  const costo=p*(1-pct/100);
+  return costo.toFixed(2);
+}
+
 function buildOutputRow(row){
   const stock=document.getElementById('stockVal').value;
   const precio=applyPriceMod(parseFloat(sanitizeNum(row['Precio']))||0);
-  const costo=sanitizeNum(row['Costo']);
+  const costoOriginal=sanitizeNum(row['Costo']);
+  // Si tiene costo lo usa, si no y está activado el auto-costo, lo calcula
+  const costo=costoOriginal!==''?costoOriginal:calcCostoAuto(precio);
   const costoPromedio=sanitizeNum(row['Costo Promedio']);
   const cantMin=sanitizeNum(row['Cantidad Mínima']);
   // Orden fijo: A B C D E F G H I J K
@@ -524,8 +557,19 @@ function resetApp(){
   document.getElementById('mayoreoDetectado').style.display='none';
 }
 
+// Costo automático toggle
+document.getElementById('chkCostoAuto').addEventListener('change',function(){
+  document.getElementById('costoAutoFields').style.display=this.checked?'block':'none';
+  if(parsedRows.length)showPreview(parsedRows.slice(0,5));
+});
+document.getElementById('costoAutoPct').addEventListener('input',function(){
+  const pct=parseFloat(this.value)||30;
+  document.getElementById('costoAutoEjemplo').textContent=`Ej: precio Q100 → costo Q${(100*(1-pct/100)).toFixed(2)}`;
+  if(parsedRows.length)showPreview(parsedRows.slice(0,5));
+});
+
 ['stockVal','partsOp'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{if(parsedRows.length)showStats(parsedRows.length)}));
-['precioOp','chkMayoreo','chkMayoreoModificar','chkOtros'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{if(parsedRows.length)showPreview(parsedRows.slice(0,5))}));
+['precioOp','chkMayoreo','chkMayoreoModificar','chkOtros','chkCostoAuto'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{if(parsedRows.length)showPreview(parsedRows.slice(0,5))}));
 </script>
 </body>
 </html>
