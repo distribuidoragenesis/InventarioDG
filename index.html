@@ -518,7 +518,7 @@ function buildOutputRow(row){
   // Orden fijo: A B C D E F G H I J K
   return {
     'Clave':    (row['Clave']||'').slice(0,60),
-    'Unidad':   (row['Unidad']||'').slice(0,25),
+    'Unidad':   (row['Unidad']||'UNIDAD').slice(0,25),
     'Nombre':   (row['Nombre']||'').slice(0,100),
     'Cantidad': stock,
     'Costo':    costo,
