@@ -338,19 +338,87 @@ function parseMayoreo(str){
   return result;
 }
 
+// Mapeo flexible de columnas: detecta nombres alternativos y los normaliza
+const COLUMN_MAP={
+  'Clave':        ['clave','sku','codigo','code','id','ref','referencia'],
+  'Nombre':       ['nombre','name','producto','descripcion_corta','titulo','title'],
+  'Precio':       ['precio','price','precio_venta','precio_menudeo','pvp'],
+  'Costo':        ['costo','cost','precio_costo','costo_unitario'],
+  'Costo Promedio':['costo promedio','costo_promedio','avg_cost'],
+  'Cantidad':     ['cantidad','stock','existencia','qty','quantity','inventario'],
+  'Cantidad Mínima':['cantidad mínima','cantidad_minima','cantidad minima','min_stock','stock_minimo'],
+  'Unidad':       ['unidad','unit','uom','unidad_medida'],
+  'Categoría':    ['categoría','categoria','category','cat','departamento'],
+  'Información Adicional':['información adicional','informacion adicional','descripcion','descripción','description','info','notas','notes'],
+  'Precios Adicionales':  ['precios adicionales','precios_adicionales','mayoreo','wholesale','bulk_prices'],
+};
+
+// Columnas de mayoreo directo (precio_media_docena, precio_docena, etc.)
+const MAYOREO_DIRECT_COLS={
+  'precio_media_docena':'1/2 DOC',
+  'precio_docena':'DOC',
+  'precio_fardo':'FARDO',
+  'precio_3uds':'3UDS',
+  'precio_fst':'FST',
+  'precio_seg':'SEG',
+  'precio_paquete':'PAQUETE',
+  'precio_mayoreo':'MAYOREO',
+  'precio_oferta':'OFERTA',
+};
+
+function normalizeHeaders(rawHeaders){
+  const normalized={};// rawHeader -> nombre canónico
+  rawHeaders.forEach(h=>{
+    const hl=h.toLowerCase().trim();
+    // Buscar en mapa canónico
+    for(const [canon,aliases] of Object.entries(COLUMN_MAP)){
+      if(hl===canon.toLowerCase()||aliases.includes(hl)){
+        normalized[h]=canon;return;
+      }
+    }
+    // Columnas de mayoreo directo
+    if(MAYOREO_DIRECT_COLS[hl]){normalized[h]='_mayoreo_col_'+hl;return;}
+    normalized[h]=h;// sin cambio
+  });
+  return normalized;
+}
+
 function parseCSV(text,file){
   const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());
   const bom=lines[0].charCodeAt(0)===0xFEFF;
   const headerLine=bom?lines[0].slice(1):lines[0];
-  headers=parseRow(headerLine).map(h=>h.trim()).filter(h=>h!=='');
+  const rawHeaders=parseRow(headerLine).map(h=>h.trim()).filter(h=>h!=='');
+  const headerNorm=normalizeHeaders(rawHeaders);
+  headers=rawHeaders;
   parsedRows=[];
   const mayoreoSet=new Set();
   for(let i=1;i<lines.length;i++){
     if(!lines[i].trim())continue;
     const vals=parseRow(lines[i]);
+    const rawRow={};
+    rawHeaders.forEach((h,idx)=>{rawRow[h]=(vals[idx]||'').trim()});
+    // Construir fila normalizada
     const row={};
-    headers.forEach((h,idx)=>{row[h]=(vals[idx]||'').trim()});
-    const m=parseMayoreo(row['Precios Adicionales']||'');
+    rawHeaders.forEach(h=>{
+      const canon=headerNorm[h];
+      if(canon.startsWith('_mayoreo_col_')){
+        // se procesa abajo
+      } else {
+        row[canon]=rawRow[h];
+      }
+    });
+    // Construir mayoreo desde columnas directas o desde Precios Adicionales
+    const mayoreoDirecto={};
+    rawHeaders.forEach(h=>{
+      const hl=h.toLowerCase().trim();
+      if(MAYOREO_DIRECT_COLS[hl]){
+        const tipo=MAYOREO_DIRECT_COLS[hl];
+        const v=parseFloat(rawRow[h]);
+        if(!isNaN(v)&&v>0)mayoreoDirecto[tipo]=v;
+      }
+    });
+    const mayoreoStr=parseMayoreo(row['Precios Adicionales']||'');
+    const m=Object.keys(mayoreoDirecto).length>0?mayoreoDirecto:mayoreoStr;
     Object.keys(m).forEach(k=>mayoreoSet.add(k));
     row._mayoreo=m;
     parsedRows.push(row);
@@ -370,11 +438,23 @@ function parseCSV(text,file){
   } else {
     document.getElementById('mayoreoDetectado').style.display='none';
   }
+
+  // Mostrar aviso de columnas mapeadas
+  const mappedNotice=[];
+  const canonicalsFound=new Set(Object.values(headerNorm).filter(v=>!v.startsWith('_mayoreo_col_')));
+  const importantCols=['Clave','Nombre','Precio','Costo','Categoría'];
+  importantCols.forEach(c=>{
+    const originalCol=rawHeaders.find(h=>headerNorm[h]===c);
+    if(originalCol&&originalCol!==c)mappedNotice.push(`<span style="color:var(--accent2);font-family:'DM Mono',monospace">${originalCol}</span> → ${c}`);
+  });
+  if(mappedNotice.length>0){
+    showMsg('msgRow',`Columnas detectadas automáticamente: ${mappedNotice.join(' &nbsp;·&nbsp; ')}`, 'info');
+  }
+
   showStats(parsedRows.length);
   showPreview(parsedRows.slice(0,5));
   document.getElementById('previewSection').style.display='block';
   document.getElementById('partsRow').style.display='none';
-  document.getElementById('msgRow').innerHTML='';
 }
 
 function sanitizeNum(val){
